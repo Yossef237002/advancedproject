@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Baby Monitoring System</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>Smart Baby Monitoring System</h1>
+    </header>
+    <main>
+        <section id="readings">
+            <h2>Current Readings</h2>
+            <p>Temperature: <span id="temperature">--</span> °C</p>
+            <p>Humidity: <span id="humidity">--</span>%</p>
+        </section>
+        <section id="baby-cry-alert">
+            <h2>Baby Cry Alert</h2>
+            <p id="cryStatus">No cry detected.</p>
+        </section>
+        <section id="motor-control">
+            <h2>Motor Control</h2>
+            <button onclick="adjustMotorSpeed('slow')">Slow</button>
+            <button onclick="adjustMotorSpeed('medium')">Medium</button>
+            <button onclick="adjustMotorSpeed('fast')">Fast</button>
+            <button onclick="stopMotor()">Stop</button>
+        </section>
+        <section id="voice-assistance">
+            <h2>Voice Assistance</h2>
+            <p>Ask: "What is the temperature?"</p>
+            <input type="text" id="voiceCommand" placeholder="Type your command">
+            <button onclick="processVoiceCommand()">Send Command</button>
+            <button onclick="startListening()">Start Voice Recognition</button>
+        </section>
+        <section id="stream">
+            <h2>Live Stream</h2>
+            <button onclick="openStream()">Stream</button>
+        </section>
+    </main>
+
+    <script>
+        // MQTT Configuration
+        const brokerURL = "ws://broker.hivemq.com:8000/mqtt"; // Replace with your MQTT broker URL
+        const temperatureTopic = "home/sensors/temperature"; // Replace with your topic
+        const humidityTopic = "home/sensors/humidity"; // Replace with your topic
+        const cryTopic = "home/alert/babycry"; // Replace with your topic for cry detection
+        const servoSpeedTopic = "home/control/servoSpeed"; // Topic for controlling servo speed
+
+        // Stream URL
+        const streamUrl = "#"; // Replace with your stream URL
+
+        // Connect to the MQTT broker
+        const client = mqtt.connect(brokerURL);
+
+        client.on('connect', () => {
+            console.log('Connected to MQTT broker');
+            client.subscribe([temperatureTopic, humidityTopic, cryTopic], (err) => {
+                if (!err) {
+                    console.log('Subscribed to topics');
+                }
+            });
+        });
+
+        // Handle incoming MQTT messages
+        client.on('message', (topic, message) => {
+            if (topic === temperatureTopic) {
+                document.getElementById('temperature').innerText = message.toString();
+            } else if (topic === humidityTopic) {
+                document.getElementById('humidity').innerText = message.toString();
+            } else if (topic === cryTopic) {
+                const cryStatus = message.toString();
+                document.getElementById('cryStatus').innerText = cryStatus === "Baby is crying!" ? "Baby is crying!" : "No cry detected.";
+            }
+        });
+
+        // Voice Assistant Script
+        const voiceCommandInput = document.getElementById('voiceCommand');
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+
+        function processVoiceCommand() {
+            const command = voiceCommandInput.value.trim().toLowerCase();
+            executeCommand(command);
+        }
+
+        function startListening() {
+            recognition.start();
+            recognition.onresult = (event) => {
+                const command = event.results[0][0].transcript.toLowerCase();
+                voiceCommandInput.value = command;
+                executeCommand(command);
+            };
+            recognition.onerror = (event) => {
+                alert('Voice recognition error: ' + event.error);
+            };
+        }
+
+        function executeCommand(command) {
+            if (command.includes('temperature')) {
+                const temp = document.getElementById('temperature').innerText;
+                if (temp !== '--') {
+                    speakResponse(`The current temperature is ${temp} degrees Celsius.`);
+                } else {
+                    speakResponse("Temperature data is not available at the moment.");
+                }
+            } else if (command.includes('humidity')) {
+                const humidity = document.getElementById('humidity').innerText;
+                if (humidity !== '--') {
+                    speakResponse(`The current humidity is ${humidity} percent.`);
+                } else {
+                    speakResponse("Humidity data is not available at the moment.");
+                }
+            }
+            if (command.includes('slow')) {
+                client.publish(servoSpeedTopic, 'slow')
+                
+                speakResponse(`the speed of motor now is slow`);
+                
+                }
+                if (command.includes('medium')) {
+                client.publish(servoSpeedTopic, 'medium')
+                
+                speakResponse(`the speed of motor now is medium`);
+                
+                }
+                if (command.includes('stop')) {
+                client.publish(servoSpeedTopic, 'stop')
+                
+                speakResponse(`the motor is stopped`);
+                
+                }
+                if (command.includes('fast')) {
+                client.publish(servoSpeedTopic, 'fast')
+                
+                speakResponse(`the speed of motor now is fast`);
+                
+                }
+            
+             else {
+                speakResponse("Sorry, I didn't understand the command.");
+            }
+        }
+
+        function speakResponse(responseText) {
+            const utterance = new SpeechSynthesisUtterance(responseText);
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Motor Control Functions
+        function adjustMotorSpeed(speed) {
+            client.publish(servoSpeedTopic, speed); // Send MQTT message to control motor speed
+            speakResponse(`Setting motor speed to ${speed}.`);
+        }
+
+        function stopMotor() {
+            client.publish(servoSpeedTopic, 'stop'); // Send stop command via MQTT
+            speakResponse("Motor stopped.");
+        }
+
+        // Open Stream Function
+        function openStream() {
+            window.open("http://192.168.1.11", '_blank'); // Open the stream URL in a new tab
+        }
+    </script>
+</body>
+</html>
